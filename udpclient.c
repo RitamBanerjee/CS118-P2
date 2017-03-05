@@ -3,18 +3,24 @@
 #include <netinet/in.h>
 #include <string.h>
 
+
 int main(int argc, char *argv[]){
   int clientSocket, portNum, nBytes;
   char buffer[1024];
+  char fileName[500];
   struct sockaddr_in serverAddr;
   socklen_t addr_size;
   if (argc < 2) {
-         fprintf(stderr,"ERROR, no port provided\n");
+         fprintf(stderr,"ERROR: no port provided\n");
+         exit(1);
+  }
+  if (argc < 3) {
+         fprintf(stderr,"ERROR: no file provided\n");
          exit(1);
   }
 
   clientSocket = socket(PF_INET, SOCK_DGRAM, 0);
-
+  strcpy(fileName,argv[2]);
   portNum = atoi(argv[1]);
   serverAddr.sin_family = AF_INET;
   serverAddr.sin_port = htons(portNum);
@@ -23,21 +29,33 @@ int main(int argc, char *argv[]){
 
   /*Initialize size variable to be used later on*/
   addr_size = sizeof serverAddr;
-
+  int handShook = 0; 
+  strcpy(buffer,"SYN\n"); //initiate handshake
   while(1){
-    printf("Type a sentence to send to server:\n");
-    fgets(buffer,1024,stdin);
-    printf("You typed: %s",buffer);
-
+    // printf("Type a sentence to send to server:\n");
+    // fgets(buffer,1024,stdin);
+    // printf("You typed: %s",buffer);
     nBytes = strlen(buffer) + 1;
+    if(!handShook){   //perform three way handshake if not already done
+      strcpy(buffer,"SYN\n");
+      nBytes = strlen(buffer)+1;
+      sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
+      nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
+      if(strcmp(buffer,"SYNACK")==0){
+        strcpy(buffer,"REQUEST:abc");
+        //strcat(buffer,fileName);
+        nBytes = strlen(buffer)+1;
+        handShook=1;
+      }
+    }
     
     /*Send message to server*/
     sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
 
     /*Receive message from server*/
-                    nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
+    nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
 
-    printf("Received from server: %s\n",buffer);
+    //printf("Received from server: %s\n",buffer);
 
   }
 

@@ -42,10 +42,17 @@ int main(int argc, char *argv[]){
   while(1){
     //receive incoming data
     nBytes = recvfrom(udpSocket,buffer,1024,0,(struct sockaddr *)&serverStorage, &addr_size);
-
-    /*Convert message received to uppercase*/
-    for(i=0;i<nBytes-1;i++)
-      buffer[i] = toupper(buffer[i]);
+    printf("filename:%s\n",buffer);
+    char* line = strtok(buffer, "\n");
+    if(strcmp(line,"SYN")==0){
+        strcpy(buffer,"SYNACK\0");
+        nBytes = strlen(buffer);
+    }
+    if(strcmp(line,"REQUEST")==0){
+        char* fileName = strtok(line, ":");
+        printf("filename:%s\n",fileName);
+        //strcpy(buffer,"RECEIVED\0");
+    }
 
     //send message back, address is serverStorage
     sendto(udpSocket,buffer,nBytes,0,(struct sockaddr *)&serverStorage,addr_size);
