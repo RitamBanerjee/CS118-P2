@@ -42,15 +42,15 @@ int main(int argc, char *argv[]){
   while(1){
     //receive incoming data
     nBytes = recvfrom(udpSocket,buffer,1024,0,(struct sockaddr *)&serverStorage, &addr_size);
-    printf("filename:%s\n",buffer);
     char* line = strtok(buffer, "\n");
+    char* filename = strtok(NULL,":");//BUG: if buffer was REQUEST\nABC:END I expect filename to be abc, but its null
     if(strcmp(line,"SYN")==0){
         strcpy(buffer,"SYNACK\0");
         nBytes = strlen(buffer);
     }
     if(strcmp(line,"REQUEST")==0){
-        char* fileName = strtok(line, ":");
-        printf("filename:%s\n",fileName);
+        //char* filename = strtok(NULL, "\n");
+        printf("filename:%s\n",filename);  // printing null here instead of filename passed in. 
         //strcpy(buffer,"RECEIVED\0");
     }
 

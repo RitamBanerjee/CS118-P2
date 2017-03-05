@@ -42,8 +42,9 @@ int main(int argc, char *argv[]){
       sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
       nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
       if(strcmp(buffer,"SYNACK")==0){
-        strcpy(buffer,"REQUEST:abc");
-        //strcat(buffer,fileName);
+        strcpy(buffer,"REQUEST\n");
+        strcat(buffer,fileName);
+        strcat(buffer,":END\n");
         nBytes = strlen(buffer)+1;
         handShook=1;
       }
