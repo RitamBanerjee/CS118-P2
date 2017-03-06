@@ -30,33 +30,50 @@ int main(int argc, char *argv[]){
   /*Initialize size variable to be used later on*/
   addr_size = sizeof serverAddr;
   int handShook = 0; 
-  strcpy(buffer,"SYN\n"); //initiate handshake
+  strcpy(buffer,"SYN:"); //initiate handshake
   while(1){
     // printf("Type a sentence to send to server:\n");
-    // fgets(buffer,1024,stdin);
+    // fgets(buffer,1024,stdin );
     // printf("You typed: %s",buffer);
     nBytes = strlen(buffer) + 1;
     if(!handShook){   //perform three way handshake if not already done
-      strcpy(buffer,"SYN\n");
+      strcpy(buffer,"SYN:");
       nBytes = strlen(buffer)+1;
       sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
+      printf("Sending Packet %s \n",buffer);
       nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
-      if(strcmp(buffer,"SYNACK")==0){
-        strcpy(buffer,"REQUEST\n:");
+      char* line = strtok(buffer,":");
+      if(strcmp(line,"SYNACK")==0){
+        printf("Receiving Packet %s \n", buffer);
+        strcpy(buffer,"REQUEST:");
         strcat(buffer,fileName);
-        strcat(buffer,":END\n");
+        strcat(buffer,":\n");
+        printf("Sending Packet Request %s \n",fileName);
         nBytes = strlen(buffer)+1;
+        sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
         handShook=1;
       }
     }
-    
+    if(handShook){
+      nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
+      char * line = strtok(buffer,":");
+      if(strcmp(line,"FYN")==0){
+        char* fynMessage = strtok(NULL,":");
+        printf("Receiving Packet FYN %s \n",fynMessage);
+        break;
+      }
+      else{
+        printf("RECEIVED: %s\n",buffer);
+      }
+
+    }
     /*Send message to server*/
     sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
 
     /*Receive message from server*/
     nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
 
-    //printf("Received from server: %s\n",buffer);
+    
 
   }
 
