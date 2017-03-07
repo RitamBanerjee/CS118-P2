@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define fileBufferLength 120
+#define fileBufferLength 10000  //Increment by this amount everytime it overflows
 
 int main(int argc, char *argv[]){
   int clientSocket, portNum, nBytes;
@@ -57,31 +57,32 @@ int main(int argc, char *argv[]){
         handShook=1;
       }
     }
-    if(handShook){
+    if(handShook){  //handles receiving packets, sending acks, and terminating on FYN
       nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
       char * line = strtok(buffer,":");
       if(strcmp(line,"FYN")==0){
         char* fynMessage = strtok(NULL,":");
-        printf("Receiving Packet FYN %s \n",fynMessage);
+        printf("Receiving Packet FYN %s \n",fynMessage);  //change according to spec
         break;
       }
       else if(strcmp(line,"Sequence")==0){
-        int bufferMultiplier = 1; 
+        int bufferMultiplier = 1;   //indicates size of file buffer
         char* sequenceNumString = strtok(NULL,":");
         int sequenceNum = atoi(sequenceNumString);
         char* data = strtok(NULL,":");
         data = strtok(NULL,":");
-        if(sequenceNum>(bufferMultiplier*fileBufferLength)){
+        if(sequenceNum>(bufferMultiplier*fileBufferLength)){  //check for file buffer overflow
           printf("reallocing\n");
           fileBuffer = realloc(fileBuffer,bufferMultiplier*fileBufferLength);
         }
         // printf("Contents: %s\n",data);  //replace with "Received SeqNo"
+        //save data to buffer
         if(sequenceNum==0)
           strcpy(fileBuffer,data);
         else
           strcat(fileBuffer,data);
         strcpy(buffer,"ACK:");
-        strcat(buffer,sequenceNumString);
+        strcat(buffer,sequenceNumString);  //ack packet that was received and stored
         nBytes = strlen(buffer);
         sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
       }
@@ -96,6 +97,6 @@ int main(int argc, char *argv[]){
     
 
   }
-  printf("Filebuf:%s\n",fileBuffer);
+  printf("Filebuf:%s\n",fileBuffer);  //check file has transfered correctly
   return 0;
 }

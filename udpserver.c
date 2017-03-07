@@ -54,22 +54,22 @@ int main(int argc, char *argv[]){
     //receive incoming data
     nBytes = recvfrom(udpSocket,buffer,1024,0,(struct sockaddr *)&serverStorage, &addr_size);
     char* line = strtok(buffer, ":");
-    if(strcmp(line,"SYN")==0){
+    if(strcmp(line,"SYN")==0){ //start of three way handshake
         printf("Receiving Packet %s \n",line);
         strcpy(buffer,"SYNACK\0");
         nBytes = strlen(buffer);
     }
-    if(strcmp(line,"REQUEST")==0){
+    if(strcmp(line,"REQUEST")==0){  //start of File handling
         char* filename = strtok(NULL,":");
         file = getFile(filename);
-        if(strcmp(file,STATUS_NOT_FOUND)==0){
+        if(strcmp(file,STATUS_NOT_FOUND)==0){  //FYN in case of no file found
             strcpy(buffer, "FYN: File Not Found:");
             printf("Sending Packet FYN: File Not Found \n");
             nBytes = strlen(buffer);
             sendto(udpSocket,buffer,nBytes,0,(struct sockaddr *)&serverStorage,addr_size);
             break;
         }
-        else
+        else   //handleTransmission returns when file transmited completely
           handleTransmission(udpSocket,(struct sockaddr *)&serverStorage,&addr_size,file);
         break;
     }
@@ -114,7 +114,8 @@ Format of Packet:
 void handleTransmission(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_size,char* file){
     char* buffer = malloc(1024);
     int nBytes,transmitting = 1;
-    int sequenceNum = 0, sequenceNumSent = 0;
+    //sequence num is num used in datagram, sequenceNumSent includes data in the latest package
+    int sequenceNum = 0, sequenceNumSent = 0;  
     int windowSize = 0; 
     while(transmitting){
       sequenceNumSent = createPacket(&buffer,file,sequenceNum);//record seq no. that has been sent, will be next seq. no. 
@@ -153,14 +154,14 @@ int createPacket(char** buffer,char* file,int sequenceNum){
       strcat(*buffer,":");
       strcat(*buffer,"Data:");
       int nBytes = strlen(*buffer);
-      int freespace = 100-nBytes-1;
+      int freespace = 1024-nBytes-1;  //bytes left for data in 1024 byte packet
       char currentData[1024];
       strncpy(currentData,&file[sequenceNum],freespace);
-      sequenceNum+=freespace;
+      sequenceNum+=freespace;     //increment sequence number by amount of new data sent
       int nullpos = strlen(currentData);
-      currentData[nullpos] = '\0';
+      currentData[nullpos] = '\0';   //null terminate data
       strcat(*buffer,currentData);
-      if(sequenceNum>fileSize)
+      if(sequenceNum>fileSize)   //indicate file transmitted
         return -1;
       else
         return sequenceNum;
