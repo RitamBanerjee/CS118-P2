@@ -2,11 +2,14 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <string.h>
+#include <stdlib.h>
 
+#define fileBufferLength 120
 
 int main(int argc, char *argv[]){
   int clientSocket, portNum, nBytes;
-  char buffer[1024];
+  char *buffer = malloc(1024);
+  char *fileBuffer = malloc(fileBufferLength);
   char fileName[500];
   struct sockaddr_in serverAddr;
   socklen_t addr_size;
@@ -49,7 +52,7 @@ int main(int argc, char *argv[]){
         strcat(buffer,fileName);
         strcat(buffer,":\n");
         printf("Sending Packet Request %s \n",fileName);
-        nBytes = strlen(buffer)+1;
+        nBytes = strlen(buffer);
         sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
         handShook=1;
       }
@@ -62,20 +65,37 @@ int main(int argc, char *argv[]){
         printf("Receiving Packet FYN %s \n",fynMessage);
         break;
       }
-      else{
-        printf("RECEIVED: %s\n",buffer);
+      else if(strcmp(line,"Sequence")==0){
+        int bufferMultiplier = 1; 
+        char* sequenceNumString = strtok(NULL,":");
+        int sequenceNum = atoi(sequenceNumString);
+        char* data = strtok(NULL,":");
+        data = strtok(NULL,":");
+        if(sequenceNum>(bufferMultiplier*fileBufferLength)){
+          printf("reallocing\n");
+          fileBuffer = realloc(fileBuffer,bufferMultiplier*fileBufferLength);
+        }
+        // printf("Contents: %s\n",data);  //replace with "Received SeqNo"
+        if(sequenceNum==0)
+          strcpy(fileBuffer,data);
+        else
+          strcat(fileBuffer,data);
+        strcpy(buffer,"ACK:");
+        strcat(buffer,sequenceNumString);
+        nBytes = strlen(buffer);
+        sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
       }
 
     }
     /*Send message to server*/
-    sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
+    //sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
 
     /*Receive message from server*/
-    nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
+    //nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
 
     
 
   }
-
+  printf("Filebuf:%s\n",fileBuffer);
   return 0;
 }
