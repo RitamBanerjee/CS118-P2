@@ -45,8 +45,10 @@ int main(int argc, char *argv[]){
       sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
       printf("Sending Packet %s \n",buffer);
       nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
+      printf("received %d bytes\n", nBytes);
       char* line = strtok(buffer,":");
       if(strcmp(line,"SYNACK")==0){
+        // printf("Receiving Packet %s \n",line);
         printf("Receiving Packet %s \n", buffer);
         strcpy(buffer,"REQUEST:");
         strcat(buffer,fileName);
@@ -59,28 +61,46 @@ int main(int argc, char *argv[]){
     }
     if(handShook){  //handles receiving packets, sending acks, and terminating on FYN
       nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
+      // printf("Buffer is %s\n--------------------\n", buffer);
       char * line = strtok(buffer,":");
+      nBytes -= (strlen(line)+1);
       if(strcmp(line,"FYN")==0){
         char* fynMessage = strtok(NULL,":");
         printf("Receiving Packet FYN %s \n",fynMessage);  //change according to spec
         break;
       }
       else if(strcmp(line,"Sequence")==0){
+        // printf("Recieving sequence...\n");
         int bufferMultiplier = 1;   //indicates size of file buffer
         char* sequenceNumString = strtok(NULL,":");
+
+        // substracting the initial blocks from nbytes 
+        nBytes -= (strlen(sequenceNumString)+1);
         int sequenceNum = atoi(sequenceNumString);
         char* data = strtok(NULL,":");
+        nBytes -= (strlen(data)+1);
+        // printf("\n\n%d\n\n", nBytes);
         data = strtok(NULL,":");
         if(sequenceNum>(bufferMultiplier*fileBufferLength)){  //check for file buffer overflow
-          printf("reallocing\n");
+          printf("reallocating\n");
+          bufferMultiplier++;
           fileBuffer = realloc(fileBuffer,bufferMultiplier*fileBufferLength);
         }
         // printf("Contents: %s\n",data);  //replace with "Received SeqNo"
+        // getchar(); // pause
         //save data to buffer
         if(sequenceNum==0)
           strcpy(fileBuffer,data);
-        else
-          strcat(fileBuffer,data);
+        else {
+          char dataSize[nBytes+1];
+          strncpy(dataSize, data, nBytes);
+          printf("\n\ndata is: %s\n----------\n", data);
+          dataSize[nBytes] = '\0';
+          printf("\n\ndataSize is: %s\n----------\n", dataSize);
+          
+          strcat(fileBuffer,dataSize);
+        }
+          
         strcpy(buffer,"ACK:");
         strcat(buffer,sequenceNumString);  //ack packet that was received and stored
         nBytes = strlen(buffer);
@@ -97,6 +117,6 @@ int main(int argc, char *argv[]){
     
 
   }
-  printf("Filebuf:%s\n",fileBuffer);  //check file has transfered correctly
+  printf("Filebuf:\n%s",fileBuffer);  //check file has transfered correctly
   return 0;
 }

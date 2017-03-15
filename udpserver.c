@@ -53,6 +53,7 @@ int main(int argc, char *argv[]){
   while(1){
     //receive incoming data
     nBytes = recvfrom(udpSocket,buffer,1024,0,(struct sockaddr *)&serverStorage, &addr_size);
+    printf("received %d bytes\n", nBytes);
     char* line = strtok(buffer, ":");
     if(strcmp(line,"SYN")==0){ //start of three way handshake
         printf("Receiving Packet %s \n",line);
@@ -60,6 +61,7 @@ int main(int argc, char *argv[]){
         nBytes = strlen(buffer);
     }
     if(strcmp(line,"REQUEST")==0){  //start of File handling
+        printf("Receiving Packet %s \n",line);
         char* filename = strtok(NULL,":");
         file = getFile(filename);
         if(strcmp(file,STATUS_NOT_FOUND)==0){  //FYN in case of no file found
