@@ -41,7 +41,7 @@ int main(int argc, char *argv[]){
     // printf("You typed: %s",buffer);
     nBytes = strlen(buffer) + 1;
     if(!handShook){   //perform three way handshake if not already done
-      strcpy(buffer,"SYN\n");
+      strcpy(buffer,"SYN\n\n");
       nBytes = strlen(buffer)+1;
       sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
       printf("Sending Packet %s",buffer);
@@ -59,15 +59,16 @@ int main(int argc, char *argv[]){
         handShook=1;
       }
     }
-    if(handShook){  //handles receiving packets, sending acks, and terminating on FYN
+    if(handShook){  //handles receiving packets, sending acks, and terminating on FIN
       nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
+      printf("\n\nBuffer is:\n%s\n\n", buffer);
       char* newBuffer = malloc(strlen(buffer));
       strcpy(newBuffer, buffer);
       char * line = strtok(newBuffer,"\n");
       nBytes -= (strlen(line)+1);
-      if(strcmp(line,"FYN")==0){
-        char* fynMessage = strtok(NULL,"\n");
-        printf("Receiving Packet FYN %s\n",fynMessage);  //change according to spec
+      if(strcmp(line,"FIN")==0){
+        char* finMessage = strtok(NULL,"\n");
+        printf("Receiving Packet FIN %s\n",finMessage);  //change according to spec
         break;
       }
       else if(strcmp(line,"Sequence")==0){
@@ -80,7 +81,7 @@ int main(int argc, char *argv[]){
         char* data = strtok(NULL,"\n");
         nBytes -= (strlen(data)+1);
         // printf("\n\n%d\n\n", nBytes);
-        data = strtok(NULL,"\n");
+        data = strtok(NULL,"\0");
         if(sequenceNum>(bufferMultiplier*fileBufferLength)){  //check for file buffer overflow
           bufferMultiplier++;
           fileBuffer = realloc(fileBuffer,bufferMultiplier*fileBufferLength);

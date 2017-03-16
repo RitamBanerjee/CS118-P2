@@ -13,6 +13,8 @@ int fileSize;
 //Function Headers
 char* getFile(char*);
 void handleTransmission(int,struct sockaddr*, socklen_t*,char*);
+int sendPacket(int,struct sockaddr*, socklen_t*,char*,int);
+int receiveACK(int,struct sockaddr*, socklen_t*,char*,int);
 int createPacket(char **,char*,int);
 
 void error(char *msg)
@@ -64,12 +66,12 @@ int main(int argc, char *argv[]){
         synReceived = 1;
     }
     if(strcmp(line,"REQUEST")==0 && synReceived == 1){  //start of File handling
-        printf("Receiving Packet %s ",line);
+        printf("Receiving Packet %s\n",line);
         char* filename = strtok(NULL,"\n");
-        printf("Size Request line: %d\n",strlen(line));
+        //printf("Size Request line: %lu\n",strlen(line));
         file = getFile(filename);
-        if(strcmp(file,STATUS_NOT_FOUND)==0){  //FYN in case of no file found
-            strcpy(buffer, "FYN\n File Not Found\n");
+        if(strcmp(file,STATUS_NOT_FOUND)==0){  //FIN in case of no file found
+            strcpy(buffer, "FIN\n File Not Found\n");
             printf("Sending Packet %s\n", buffer);
             nBytes = strlen(buffer);
             sendto(udpSocket,buffer,nBytes,0,(struct sockaddr *)&serverStorage,addr_size);
@@ -122,50 +124,95 @@ char* getFile(char* filename) {
 
 /*
 Format of Packet: 
-  Sequence:xyz:Data:null terminated*/
+  Sequence\nxyz\nData\n...null terminated*/
 void handleTransmission(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_size,char* file){
     char* buffer = malloc(1024);
     int nBytes,transmitting = 1;
     //sequence num is num used in datagram, sequenceNumSent includes data in the latest package
     int sequenceNum = 0, sequenceNumSent = 0;  
     int windowSize = 0; 
+    int sendingPacket = 1; //set to 0 when waiting on ACKs from client, set to 1 when packets in window ready to be sent
     while(transmitting){
-      sequenceNumSent = createPacket(&buffer,file,sequenceNum);//record seq no. that has been sent, will be next seq. no. 
-      nBytes = strlen(buffer);
-      printf("sending packet: %i\n%s\n",nBytes, buffer);
-      sendto(udpSocket,buffer,nBytes,0,serverStorage,*addr_size);
+      if(sendingPacket){
+        sequenceNumSent = sendPacket(udpSocket,serverStorage,addr_size,file,sequenceNum);
+        printf("Sending packet %d %d\n", sequenceNum, windowSize);
+        sendingPacket = 0; 
+      }
+      // sequenceNumSent = createPacket(&buffer,file,sequenceNum);//record seq no. that has been sent, will be next seq. no. 
+      // nBytes = strlen(buffer);
+      // //printf("Sending packet: %i\n%s\n",nBytes, buffer);
+      // printf("Sending packet");
+      // sendto(udpSocket,buffer,nBytes,0,serverStorage,*addr_size);
       // if(sequenceNumSent==-1)
       //   transmitting=0;
-      nBytes = recvfrom(udpSocket,buffer,1024,0,serverStorage, &(*addr_size));
-      buffer[nBytes] = 0;
-      printf("Buffer recieved: %i\n%s\n\n", nBytes, buffer);
-      char* line = strtok(buffer, "\n");
-      char* ackNumString = strtok(NULL,"\n");
-      int ackNum = atoi(ackNumString);
-      if(ackNum==sequenceNum){  //checks if packet sent has been acked{
-        printf("ackno:%d\n",ackNum);
-        if(sequenceNumSent==-1){  //this plus ack means file is transmitted completely
-          printf("sending fyn\n");
-          strcpy(buffer,"FYN\n");
-          nBytes = strlen(buffer);
-          sendto(udpSocket,buffer,nBytes,0,serverStorage,*addr_size);
-          transmitting = 0;
-        }
-        sequenceNum = sequenceNumSent; //update seq. number
+      if(receiveACK(udpSocket,serverStorage,addr_size,file,sequenceNum)){
+        sequenceNum = sequenceNumSent; //once packet acked, we can update sequenceNum
+        sendingPacket = 1; 
       }
-      else{//handle retransmission
-
+      if(sequenceNumSent==-1){  //this indicates file has been transmitted and ACKed completely
+            printf("Sending FIN\n");
+            strcpy(buffer,"FIN\n");
+            nBytes = strlen(buffer);
+            sendto(udpSocket,buffer,nBytes,0,serverStorage,*addr_size);
+            transmitting = 0;
       }
+      // nBytes = recvfrom(udpSocket,buffer,1024,0,serverStorage, &(*addr_size));
+      // buffer[nBytes] = 0;
+      // //printf("Buffer recieved: %i\n%s\n\n", nBytes, buffer);
+      // char* line = strtok(buffer, "\n");
+      // if(strcmp(line,"ACK")==0){
+      //   char* ackNumString = strtok(NULL,"\n");
+      //   int ackNum = atoi(ackNumString);
+      //   if(ackNum==sequenceNum){  //checks if packet sent has been acked{
+      //     printf("ackno:%d\n",ackNum);
+      //     if(sequenceNumSent==-1){  //this indicates file has been transmitted and ACKed completely
+      //       printf("Sending FIN\n");
+      //       strcpy(buffer,"FIN\n");
+      //       nBytes = strlen(buffer);
+      //       sendto(udpSocket,buffer,nBytes,0,serverStorage,*addr_size);
+      //       transmitting = 0;
+      //     }
+      //     sequenceNum = sequenceNumSent; //update seq. number
+      //     sendingPacket = 1; 
+      //   }
+        // else{//handle retransmission
 
+        // }
+      //}
     }
 }
+ /*sends a packet to the client and returns the sequence number of the packet*/
+int sendPacket(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_size,char* file,int sequenceNum){
+      char* buffer = malloc(1024);
+      int sequenceNumSent = createPacket(&buffer,file,sequenceNum); //returns seq no. that has been sent, will be next seq. no. Set to -1 when entire file has been sent
+      int nBytes = strlen(buffer);
+      sendto(udpSocket,buffer,nBytes,0,serverStorage,*addr_size);
+      return sequenceNumSent;
 
+}
+ /*sends a packet to the client and returns the sequence number of the packet*/
+int receiveACK(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_size,char* file,int sequenceNum){
+      char* buffer = malloc(1024);
+      int nBytes = recvfrom(udpSocket,buffer,1024,0,serverStorage, &(*addr_size));
+      buffer[nBytes] = 0;
+      //printf("Buffer recieved: %i\n%s\n\n", nBytes, buffer);
+      char* line = strtok(buffer, "\n");
+      if(strcmp(line,"ACK")==0){
+        char* ackNumString = strtok(NULL,"\n");
+        int ackNum = atoi(ackNumString);
+        if(ackNum==sequenceNum){  //checks if packet sent has been acked{
+          printf("ackno:%d\n",ackNum);
+          return 1; 
+        }
+      }
+      return 0; 
+}
 int createPacket(char** buffer,char* file,int sequenceNum){
       int nDigits = floor(log10(abs(sequenceNum))) + 1;
       if (nDigits < 0) {
         nDigits = 1;
       }
-      printf("\n\n%i\n\n", nDigits);
+      //printf("\n\n%i\n\n", nDigits);
       char sequenceNumString[nDigits+1];
       strcpy(*buffer,"Sequence\n");
       sprintf(sequenceNumString,"%d",sequenceNum);
@@ -176,6 +223,7 @@ int createPacket(char** buffer,char* file,int sequenceNum){
       int freespace = 1024-nBytes-1;  //bytes left for data in 1024 byte packet
       char currentData[1024];
       strncpy(currentData,&file[sequenceNum],freespace);
+      //sequenceNum is always 1004. IDK if we should hardcode it thoo
       sequenceNum+=freespace;     //increment sequence number by amount of new data sent
       int nullpos = strlen(currentData);
       currentData[nullpos] = '\0';   //null terminate data
