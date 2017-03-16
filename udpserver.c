@@ -9,7 +9,7 @@
 #define STATUS_OK "200 OK"
 #define STATUS_NOT_FOUND "404 Not Found"
 //Global Vars
-int fileSize;
+long fileSize;
 //Function Headers
 char* getFile(char*);
 void handleTransmission(int,struct sockaddr*, socklen_t*,char*);
@@ -56,6 +56,7 @@ int main(int argc, char *argv[]){
 
   while(1){
     //receive incoming data
+
     nBytes = recvfrom(udpSocket,buffer,1024,0,(struct sockaddr *)&serverStorage, &addr_size);
     //printf("Received %d bytes\n", nBytes);
     char* line = strtok(buffer, "\n");
@@ -71,7 +72,7 @@ int main(int argc, char *argv[]){
         //printf("Size Request line: %lu\n",strlen(line));
         file = getFile(filename);
         if(strcmp(file,STATUS_NOT_FOUND)==0){  //FIN in case of no file found
-            strcpy(buffer, "FIN\n File Not Found\n");
+            strcpy(buffer, "FIN\nFile Not Found\n");
             printf("Sending Packet %s\n", buffer);
             nBytes = strlen(buffer);
             sendto(udpSocket,buffer,nBytes,0,(struct sockaddr *)&serverStorage,addr_size);
@@ -109,6 +110,7 @@ char* getFile(char* filename) {
     /* Get the number of bytes */
     fseek(fp, 0, SEEK_END);
     fileSize = ftell(fp);
+    printf("fileSize is: %lu\n", fileSize);
 
     /* reset the file position indicator to the beginning of the file */
     fseek(fp, 0, SEEK_SET);
@@ -186,6 +188,7 @@ int sendPacket(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_siz
       char* buffer = malloc(1024);
       int sequenceNumSent = createPacket(&buffer,file,sequenceNum); //returns seq no. that has been sent, will be next seq. no. Set to -1 when entire file has been sent
       int nBytes = strlen(buffer);
+      // printf("buffer\n%s\n", buffer);
       sendto(udpSocket,buffer,nBytes,0,serverStorage,*addr_size);
       return sequenceNumSent;
 
