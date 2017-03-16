@@ -41,7 +41,7 @@ int main(int argc, char *argv[]){
     // printf("You typed: %s",buffer);
     nBytes = strlen(buffer) + 1;
     if(!handShook){   //perform three way handshake if not already done
-      strcpy(buffer,"SYN\n");
+      strcpy(buffer,"SYN\n\n");
       nBytes = strlen(buffer)+1;
       sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
       printf("Sending Packet %s",buffer);
@@ -61,6 +61,7 @@ int main(int argc, char *argv[]){
     }
     if(handShook){  //handles receiving packets, sending acks, and terminating on FYN
       nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
+      printf("\n\nBuffer is:\n%s\n\n", buffer);
       char* newBuffer = malloc(strlen(buffer));
       strcpy(newBuffer, buffer);
       char * line = strtok(newBuffer,"\n");
@@ -80,7 +81,7 @@ int main(int argc, char *argv[]){
         char* data = strtok(NULL,"\n");
         nBytes -= (strlen(data)+1);
         // printf("\n\n%d\n\n", nBytes);
-        data = strtok(NULL,"\n");
+        data = strtok(NULL,"\0");
         if(sequenceNum>(bufferMultiplier*fileBufferLength)){  //check for file buffer overflow
           bufferMultiplier++;
           fileBuffer = realloc(fileBuffer,bufferMultiplier*fileBufferLength);
