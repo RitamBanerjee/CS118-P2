@@ -28,6 +28,7 @@ int main(int argc, char *argv[]){
   struct sockaddr_storage serverStorage;
   socklen_t addr_size, client_addr_size;
   char* file = NULL;
+  int synReceived = 0; 
   int i;
   if (argc < 2) {
     fprintf(stderr,"ERROR: no port provided\n");
@@ -54,27 +55,32 @@ int main(int argc, char *argv[]){
   while(1){
     //receive incoming data
     nBytes = recvfrom(udpSocket,buffer,1024,0,(struct sockaddr *)&serverStorage, &addr_size);
-    printf("Received %d bytes\n", nBytes);
-    char* line = strtok(buffer, ":");
+    //printf("Received %d bytes\n", nBytes);
+    char* line = strtok(buffer, "\n");
     if(strcmp(line,"SYN")==0){ //start of three way handshake
         printf("Receiving Packet %s \n",line);
         strcpy(buffer,"SYNACK\0");
         nBytes = strlen(buffer);
+        synReceived = 1;
     }
-    if(strcmp(line,"REQUEST")==0){  //start of File handling
-        printf("Receiving Packet %s, ",line);
-        char* filename = strtok(NULL,":");
-        printf("%s\n",filename);
+    if(strcmp(line,"REQUEST")==0 && synReceived == 1){  //start of File handling
+        printf("Receiving Packet %s ",line);
+        char* filename = strtok(NULL,"\n");
+        printf("Size Request line: %d\n",strlen(line));
         file = getFile(filename);
         if(strcmp(file,STATUS_NOT_FOUND)==0){  //FYN in case of no file found
-            strcpy(buffer, "FYN: File Not Found:");
+            strcpy(buffer, "FYN\n File Not Found\n");
             printf("Sending Packet %s\n", buffer);
             nBytes = strlen(buffer);
             sendto(udpSocket,buffer,nBytes,0,(struct sockaddr *)&serverStorage,addr_size);
+            synReceived = 0; 
             break;
         }
-        else   //handleTransmission returns when file transmited completely
+        else{
           handleTransmission(udpSocket,(struct sockaddr *)&serverStorage,&addr_size,file);
+          synReceived = 0; 
+        }   //handleTransmission returns when file transmited completely
+
         break;
     }
 
@@ -133,14 +139,14 @@ void handleTransmission(int udpSocket, struct sockaddr* serverStorage,socklen_t*
       nBytes = recvfrom(udpSocket,buffer,1024,0,serverStorage, &(*addr_size));
       buffer[nBytes] = 0;
       printf("Buffer recieved: %i\n%s\n\n", nBytes, buffer);
-      char* line = strtok(buffer, ":");
-      char* ackNumString = strtok(NULL,":");
+      char* line = strtok(buffer, "\n");
+      char* ackNumString = strtok(NULL,"\n");
       int ackNum = atoi(ackNumString);
       if(ackNum==sequenceNum){  //checks if packet sent has been acked{
         printf("ackno:%d\n",ackNum);
         if(sequenceNumSent==-1){  //this plus ack means file is transmitted completely
           printf("sending fyn\n");
-          strcpy(buffer,"FYN:");
+          strcpy(buffer,"FYN\n");
           nBytes = strlen(buffer);
           sendto(udpSocket,buffer,nBytes,0,serverStorage,*addr_size);
           transmitting = 0;
@@ -161,11 +167,11 @@ int createPacket(char** buffer,char* file,int sequenceNum){
       }
       printf("\n\n%i\n\n", nDigits);
       char sequenceNumString[nDigits+1];
-      strcpy(*buffer,"Sequence:");
+      strcpy(*buffer,"Sequence\n");
       sprintf(sequenceNumString,"%d",sequenceNum);
       strcat(*buffer,sequenceNumString);
-      strcat(*buffer,":");
-      strcat(*buffer,"Data:");
+      strcat(*buffer,"\n");
+      strcat(*buffer,"Data\n");
       int nBytes = strlen(*buffer);
       int freespace = 1024-nBytes-1;  //bytes left for data in 1024 byte packet
       char currentData[1024];
