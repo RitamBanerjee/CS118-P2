@@ -2,8 +2,10 @@ CC=gcc
 CFLAGS=-I.
 DEPS = # header file
 
-%.o: %.c $(DEPS)
-	$(CC) -c -o  $@ $< $(CFLAGS)
+
+all: udpserver.o udpclient.o
+	$(CC) -o client udpclient.c $(CFLAGS)
+	$(CC) -o server udpserver.c $(CFLAGS)
 
 server: udpserver.o
 	$(CC) -o $@ $^ $(CFLAGS)
