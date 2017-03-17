@@ -9,7 +9,7 @@
 #define STATUS_OK "200 OK"
 #define STATUS_NOT_FOUND "404 Not Found"
 //Global Vars
-long fileSize;
+int fileSize;
 //Function Headers
 char* getFile(char*);
 void handleTransmission(int,struct sockaddr*, socklen_t*,char*);
@@ -110,7 +110,7 @@ char* getFile(char* filename) {
     /* Get the number of bytes */
     fseek(fp, 0, SEEK_END);
     fileSize = ftell(fp);
-    printf("fileSize is: %lu\n", fileSize);
+    printf("fileSize is: %d\n", fileSize);
 
     /* reset the file position indicator to the beginning of the file */
     fseek(fp, 0, SEEK_SET);
@@ -189,7 +189,7 @@ int sendPacket(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_siz
       int sequenceNumSent = createPacket(&buffer,file,sequenceNum); //returns seq no. that has been sent, will be next seq. no. Set to -1 when entire file has been sent
       int nBytes = strlen(buffer);
       // printf("buffer\n%s\n", buffer);
-      sendto(udpSocket,buffer,nBytes,0,serverStorage,*addr_size);
+      sendto(udpSocket,buffer,1024,0,serverStorage,*addr_size);
       return sequenceNumSent;
 
 }
@@ -228,19 +228,32 @@ int createPacket(char** buffer,char* file,int sequenceNum){
       strcat(*buffer,"\n");
       strcat(*buffer,"Data\n");
       int nBytes = strlen(*buffer);
-      int freespace = 1024-nBytes-1;  //bytes left for data in 1024 byte packet
+      int freespace = 1024-nBytes;  //bytes left for data in 1024 byte packet
       int futuresum = sequenceNum+freespace;
       if(futuresum>fileSize){
         freespace = fileSize-sequenceNum;
       }
-      //printf("freespace: %d \n",freespace);
+      printf("freespace: %d \n",freespace);
       //printf("Filesize:%d\n",fileSize);
-      char currentData[1024]; 
-      strncpy(currentData,&file[sequenceNum],freespace);
+      char* currentData = malloc(1024);
+      //printf("FILE:%s\n",file);
+      memcpy(currentData,*buffer,nBytes);
+      currentData+=nBytes;
+      memcpy(currentData,file+sequenceNum,freespace);
+      currentData-= nBytes;
+      memcpy(*buffer,currentData,freespace+nBytes);
       //freespace is always 1004. IDK if we should hardcode it thoo
       sequenceNum+=freespace;     //increment sequence number by amount of new data sent
-      currentData[freespace] = '\0';   //null terminate data
-      strcat(*buffer,currentData);
+      // currentData[freespace] = '\0';   //null terminate data
+      //memcpy(holdover,)
+      //memmove(buffer,currentData, freespace+1);
+      //buffer += nBytes;
+      //memcpy(*buffer,currentData,freespace);
+      //buffer-= nBytes;
+      //printf("printing file2");
+      // buffer+=480;÷
+      printf("FILE2:%s\n", *buffer);
+      //printf("end file: %s \n",*buffer);
       //if(sequenceNum>fileSize)   //indicate file transmitted
       if(futuresum>fileSize) 
         return -1;
