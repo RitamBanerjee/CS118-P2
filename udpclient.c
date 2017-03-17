@@ -75,10 +75,8 @@ int main(int argc, char *argv[]){
       printf("nBytes is %i\n", nBytes);
 
       // allocating newBuffer to store copy of buffer
-      char* newBuffer = malloc(strlen(buffer));
-      printf("2 is %i\n", nBytes);
+      char* newBuffer = malloc(100);
       memcpy(newBuffer, buffer, 100);
-      printf("3 is %i\n", nBytes);
       char* line = strtok(newBuffer,"\n");
       // substracting bytes from the text before the deliminator
       nBytes -= (strlen(line)+1);
@@ -110,7 +108,6 @@ int main(int argc, char *argv[]){
         char* data = strtok(NULL,"\n");
         nBytes -= (strlen(data)+1);
 
-        printf("\n\n%d\n\n", nBytes);
         int headerSize = 1024-nBytes;
         if (sequenceNum+nBytes > fileSize) {
           //printf("sequencenum+nbytes > filesize\n");
@@ -118,7 +115,6 @@ int main(int argc, char *argv[]){
           //printf("nBytes is %i\n", nBytes);
         }
 
-        printf("buffer: %s", buffer);
         char* receivedData = malloc(1024);
         memcpy(receivedData, buffer+headerSize, nBytes);
         //printf("sequenceNum is %i\nnBytes is %i\nreceivedData is %s\n\n",sequenceNum, nBytes, receivedData);
