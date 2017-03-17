@@ -15,6 +15,7 @@ int sendSYN(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_size) 
 }
 
 int main(int argc, char *argv[]){
+  char* inOrderFileBuffer; 
   int clientSocket, portNum, nBytes;
   int bufferMultiplier = 1;   //indicates size of file buffer
   char *buffer = malloc(1024);
@@ -76,10 +77,9 @@ int main(int argc, char *argv[]){
       // allocating newBuffer to store copy of buffer
       char* newBuffer = malloc(strlen(buffer));
       printf("2 is %i\n", nBytes);
-      strcpy(newBuffer, buffer);
+      memcpy(newBuffer, buffer, 100);
       printf("3 is %i\n", nBytes);
       char* line = strtok(newBuffer,"\n");
-
       // substracting bytes from the text before the deliminator
       nBytes -= (strlen(line)+1);
       if(strcmp(line,"FIN")==0){
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]){
       }
       // process the packet recieved
       else if(strcmp(line,"Sequence")==0) {
-        // printf("Recieving sequence...\n");
+        //printf("Recieving sequence...\n");
         char* sequenceNumString = strtok(NULL,"\n");
         // substracting bytes from the text before the deliminator
         // getting sequenceNum
@@ -99,7 +99,10 @@ int main(int argc, char *argv[]){
         // getting file size
         char* fileSizeString = strtok(NULL, "\n");
         fileSize = atoi(fileSizeString);
-
+        if(sequenceNum==0){
+          //printf("seq = 0");
+          inOrderFileBuffer = malloc(fileSize);
+        }
         // subtract filesize from nBytes
         nBytes -= (strlen(fileSizeString)+1);
         
@@ -107,7 +110,7 @@ int main(int argc, char *argv[]){
         char* data = strtok(NULL,"\n");
         nBytes -= (strlen(data)+1);
 
-        // printf("\n\n%d\n\n", nBytes);
+        printf("\n\n%d\n\n", nBytes);
         int headerSize = 1024-nBytes;
         if (sequenceNum+nBytes > fileSize) {
           //printf("sequencenum+nbytes > filesize\n");
@@ -115,7 +118,7 @@ int main(int argc, char *argv[]){
           //printf("nBytes is %i\n", nBytes);
         }
 
-        // printf("buffer: %s", buffer);
+        printf("buffer: %s", buffer);
         char* receivedData = malloc(1024);
         memcpy(receivedData, buffer+headerSize, nBytes);
         //printf("sequenceNum is %i\nnBytes is %i\nreceivedData is %s\n\n",sequenceNum, nBytes, receivedData);
@@ -125,18 +128,24 @@ int main(int argc, char *argv[]){
           // printf("Buffer has been allocated to %i", bufferMultiplier*fileBufferLength);
         }
         //save data to buffer
-        if(sequenceNum==0)
+        if(sequenceNum==0){
           memcpy(fileBuffer,receivedData, nBytes);
+          //printf("filebuffer: %s\n",fileBuffer);
+        }
         else {
           // printf("\n\ndataSize is: %i\n%s\n--------------------\n", nBytes, dataSize);
           memcpy(fileBuffer+sequenceNum,receivedData,nBytes);
         }
+
+        memcpy(inOrderFileBuffer+sequenceNum,receivedData,nBytes);  
+
           
         strcpy(buffer,"ACK\n");
         strcat(buffer,sequenceNumString);  //ack packet that was received and stored
         strcat(buffer,"\n");
         nBytes = strlen(buffer);
         sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
+        printf("Sending Packet %s \n",sequenceNumString);
       }
 
     }

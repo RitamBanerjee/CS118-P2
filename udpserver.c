@@ -11,11 +11,64 @@
 //Global Vars
 int fileSize;
 //Function Headers
+int windowsize = 1024*1; 
 char* getFile(char*);
 void handleTransmission(int,struct sockaddr*, socklen_t*,char*);
 int sendPacket(int,struct sockaddr*, socklen_t*,char*,int);
 int receiveACK(int,struct sockaddr*, socklen_t*,char*,int);
 int createPacket(char **,char*,int);
+typedef struct Packet Packet; 
+struct Packet{
+  char* buffer;
+  int sequenceNum;
+  //int bufferSize; 
+};
+
+//typedef struct Packet* Packet; 
+struct Packet* packetArray[1000]; //array of pointers to packet structs
+int numPackets = 0;
+
+struct Packet* newPacket(char* data, int sequenceNum, int dataSize){
+  struct Packet* packet = malloc(sizeof (Packet));
+
+  // setting buffer to be data
+  char* bufferCopy = malloc(1024);
+  memcpy(bufferCopy, data, dataSize);
+  packet->buffer = bufferCopy;
+  packet->sequenceNum = sequenceNum;
+  //packet->bufferSize = dataSize;
+
+  return packet;
+}
+void deletePacket(Packet* p){
+  if(p!=NULL){
+   // printf("inside deletepacket");
+    free(p->buffer);
+    printf("Deleting packwet w/ seq. no: %d\n",p->sequenceNum);
+    free(p);
+   // printf("leaving deletepacket");
+  }
+}
+
+void printPacket(Packet* p) {
+  printf("Seq no: %d\n",p->sequenceNum);
+}
+
+int deleteACKedPacket(int ACKno){
+  for(int i = 0; i<1000;i++){
+    // printf("%d,", i);
+    if(packetArray[i]!=NULL){
+      printPacket(packetArray[i]);
+      printf("ACKNO:%d\n",ACKno);
+      if(packetArray[i]->sequenceNum==ACKno){
+        //printf("packet seq == ackno");
+        deletePacket(packetArray[i]);
+        return ACKno;
+      }
+    }
+  }
+  return 1; 
+}
 
 void error(char *msg)
 {
@@ -130,27 +183,46 @@ Format of Packet:
 void handleTransmission(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_size,char* file){
     char* buffer = malloc(1024);
     int nBytes,transmitting = 1;
+    int windowCount = 0; 
     //sequence num is num used in datagram, sequenceNumSent includes data in the latest package
     int sequenceNum = 0, sequenceNumSent = 0;  
-    int windowSize = 0; 
     int sendingPacket = 1; //set to 0 when waiting on ACKs from client, set to 1 when packets in window ready to be sent
     while(transmitting){
       if(sendingPacket){
-        sequenceNumSent = sendPacket(udpSocket,serverStorage,addr_size,file,sequenceNum);
-        printf("Sending packet %d %d\n", sequenceNum, windowSize);
+        while((windowCount*1024)<windowsize){
+        sequenceNum = sequenceNumSent;
+        sequenceNumSent = sendPacket(udpSocket,serverStorage,addr_size,file,sequenceNumSent);
+        printf("Sending packet %d %d\n", sequenceNum, windowsize);
+        windowCount++;
+        if(sequenceNumSent==-1){
+          sendingPacket = 0; 
+          break;
+        }
+      }
         sendingPacket = 0; 
       }
-      if(receiveACK(udpSocket,serverStorage,addr_size,file,sequenceNum)){
+      if(receiveACK(udpSocket,serverStorage,addr_size,file,sequenceNum) && windowCount!=0){
+        printf("decrementing window count");
+        windowCount--;
         sequenceNum = sequenceNumSent; //once packet acked, we can update sequenceNum
         sendingPacket = 1; 
       }
-      if(sequenceNumSent==-1){  //this indicates file has been transmitted and ACKed completely
+
+      printf("windowcount: %d", windowCount);
+      if(windowCount==0){
+        if(sequenceNumSent==-1)
+        {
             printf("Sending FIN\n");
             strcpy(buffer,"FIN\n");
             nBytes = strlen(buffer);
             sendto(udpSocket,buffer,nBytes,0,serverStorage,*addr_size);
             transmitting = 0;
+        }
+        sendingPacket = 1; 
       }
+      // if(sequenceNumSent==-1){  //this indicates file has been transmitted and ACKed completely
+
+      // }
     }
 }
  /*sends a packet to the client and returns the sequence number of the packet*/
@@ -175,7 +247,14 @@ int receiveACK(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_siz
         int ackNum = atoi(ackNumString);
         if(ackNum==sequenceNum){  //checks if packet sent has been acked{
           printf("Receiving Packet %d\n",ackNum);
-          return 1; 
+          if(deleteACKedPacket(ackNum)>=0){
+            printf("DELETE RETURN 1");
+            return 1; 
+          }
+          else {
+            printf("delete return 0");
+            return 0; 
+          }
         }
       }
       return 0; 
@@ -211,7 +290,10 @@ int createPacket(char** buffer,char* file,int sequenceNum){
       currentData-= nBytes;
       memcpy(*buffer,currentData,freespace+nBytes);
       //freespace is always 1004. IDK if we should hardcode it thoo
+      packetArray[numPackets] = newPacket(*buffer,sequenceNum,freespace+nBytes);
+      printPacket(packetArray[numPackets]);
       sequenceNum+=freespace;     //increment sequence number by amount of new data sent
+      numPackets++;
       if(futuresum>fileSize) 
         return -1;
       else
