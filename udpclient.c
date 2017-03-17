@@ -82,7 +82,6 @@ int main(int argc, char *argv[]){
 
       // substracting bytes from the text before the deliminator
       nBytes -= (strlen(line)+1);
-      printf("4 is %i\n", nBytes);
       if(strcmp(line,"FIN")==0){
         char* finMessage = strtok(NULL,"\n");
         printf("Receiving packet %s FIN\n",finMessage);  //change according to spec
@@ -92,58 +91,44 @@ int main(int argc, char *argv[]){
       else if(strcmp(line,"Sequence")==0) {
         // printf("Recieving sequence...\n");
         char* sequenceNumString = strtok(NULL,"\n");
-
         // substracting bytes from the text before the deliminator
         // getting sequenceNum
         nBytes -= (strlen(sequenceNumString)+1);
         int sequenceNum = atoi(sequenceNumString);
-        printf("nBytes is %i\n", nBytes);
 
         // getting file size
         char* fileSizeString = strtok(NULL, "\n");
         fileSize = atoi(fileSizeString);
-        //  printf("filesize is %i\n", fileSize);
 
         // subtract filesize from nBytes
         nBytes -= (strlen(fileSizeString)+1);
-        printf("nBytes is %i\n", nBytes); 
         
         // getting data
         char* data = strtok(NULL,"\n");
         nBytes -= (strlen(data)+1);
-        printf("nBytes is %i\n", nBytes);
 
         // printf("\n\n%d\n\n", nBytes);
         int headerSize = 1024-nBytes;
         if (sequenceNum+nBytes > fileSize) {
-          printf("sequencenum+nbytes > filesize\n");
+          //printf("sequencenum+nbytes > filesize\n");
           nBytes = fileSize-sequenceNum;
-          printf("nBytes is %i\n", nBytes);
+          //printf("nBytes is %i\n", nBytes);
         }
+
         // printf("buffer: %s", buffer);
         char* receivedData = malloc(1024);
         memcpy(receivedData, buffer+headerSize, nBytes);
-        // printf("size of rec data: %s \n",strlen(receivedData));
-        // printf("last letter: %c \n", receivedData[nBytes-1]);
-        //printf("after header: %s \n", buffer+headerSize);
-          printf("AHAHAHAHAHA:%c",buffer[1023]);
-        printf("sequenceNum is %i\nnBytes is %i\nreceivedData is %s\n\n",sequenceNum, nBytes, receivedData);
+        //printf("sequenceNum is %i\nnBytes is %i\nreceivedData is %s\n\n",sequenceNum, nBytes, receivedData);
         if((sequenceNum + nBytes) > (bufferMultiplier * fileBufferLength)){  //check for file buffer overflow
           bufferMultiplier++;
           fileBuffer = realloc(fileBuffer,bufferMultiplier*fileBufferLength);
           // printf("Buffer has been allocated to %i", bufferMultiplier*fileBufferLength);
         }
-        // printf("Contents: %s\n",data);  //replace with "Received SeqNo"
-        // getchar(); // pause
         //save data to buffer
         if(sequenceNum==0)
           memcpy(fileBuffer,receivedData, nBytes);
         else {
-          // char dataSize[nBytes+1];
-          // strncpy(dataSize, data, nBytes);
-          // dataSize[nBytes] = '\0';
           // printf("\n\ndataSize is: %i\n%s\n--------------------\n", nBytes, dataSize);
-
           memcpy(fileBuffer+sequenceNum,receivedData,nBytes);
         }
           
@@ -155,19 +140,14 @@ int main(int argc, char *argv[]){
       }
 
     }
-    /*Send message to server*/
-    //sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
-
-    /*Receive message from server*/
-    //nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
   } 
-  printf("Filebuffer:\n%s\n",fileBuffer);  //check file has transfered correctly
+  //printf("Filebuffer:\n%s\n",fileBuffer);  //check file has transfered correctly
 
   // saving to file recieved.data
   FILE *fp = fopen("received.data", "wb+");
   // printf("sizeof buffer is: %lu\n", sizeof(fileBuffer));
   // printf("strlen buffer is: %lu\n", strlen(fileSize));
-  printf("Len of file buf: %d\n",strlen(fileBuffer));
+  //printf("Len of file buf: %d\n",strlen(fileBuffer));
   fwrite(fileBuffer,1,fileSize, fp);
   fclose(fp);
   return 0;
