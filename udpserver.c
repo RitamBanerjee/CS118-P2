@@ -212,26 +212,37 @@ int receiveACK(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_siz
 }
 int createPacket(char** buffer,char* file,int sequenceNum){
       int nDigits = floor(log10(abs(sequenceNum))) + 1;
+      int nFileSizeDigits = floor(log10(abs(fileSize)))+1;
       if (nDigits < 0) {
         nDigits = 1;
       }
       //printf("\n\n%i\n\n", nDigits);
       char sequenceNumString[nDigits+1];
+      char fileSizeString[nFileSizeDigits+1];
       strcpy(*buffer,"Sequence\n");
       sprintf(sequenceNumString,"%d",sequenceNum);
       strcat(*buffer,sequenceNumString);
       strcat(*buffer,"\n");
+      sprintf(fileSizeString,"%d",fileSize);
+      strcat(*buffer,fileSizeString);
+      strcat(*buffer,"\n");
       strcat(*buffer,"Data\n");
       int nBytes = strlen(*buffer);
       int freespace = 1024-nBytes-1;  //bytes left for data in 1024 byte packet
-      char currentData[1024];
+      int futuresum = sequenceNum+freespace;
+      if(futuresum>fileSize){
+        freespace = fileSize-sequenceNum;
+      }
+      //printf("freespace: %d \n",freespace);
+      //printf("Filesize:%d\n",fileSize);
+      char currentData[1024]; 
       strncpy(currentData,&file[sequenceNum],freespace);
-      //sequenceNum is always 1004. IDK if we should hardcode it thoo
+      //freespace is always 1004. IDK if we should hardcode it thoo
       sequenceNum+=freespace;     //increment sequence number by amount of new data sent
-      int nullpos = strlen(currentData);
-      currentData[nullpos] = '\0';   //null terminate data
+      currentData[freespace] = '\0';   //null terminate data
       strcat(*buffer,currentData);
-      if(sequenceNum>fileSize)   //indicate file transmitted
+      //if(sequenceNum>fileSize)   //indicate file transmitted
+      if(futuresum>fileSize) 
         return -1;
       else
         return sequenceNum;
