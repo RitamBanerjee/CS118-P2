@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-I.
+CFLAGS=-lm -I.
 DEPS = # header file
 
 

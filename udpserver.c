@@ -5,7 +5,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
-#include <time.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 #define STATUS_OK "200 OK"
 #define STATUS_NOT_FOUND "404 Not Found"
@@ -64,7 +65,8 @@ void printPacket(Packet* p) {
 }
 
 int deleteACKedPacket(int ACKno){
-  for(int i = 0; i<numPackets;i++){
+  int i;
+  for(i = 0; i<numPackets;i++){
     // printf("%d,", i);
     if(packetArray[i]!=NULL){
       printPacket(packetArray[i]);
@@ -216,9 +218,15 @@ void handleTransmission(int udpSocket, struct sockaddr* serverStorage,socklen_t*
     int sequenceNum = 0, sequenceNumSent = 0, sequenceSentSize = 0;
     int sendingPacket = 1; //set to 0 when waiting on ACKs from client, set to 1 when packets in window ready to be sent
    
+    // for select
+    fd_set readfds;
+   
     while(transmitting){
-      // FD_ZERO(&readfds);
-			// FD_SET(fd, &readfds);
+      FD_ZERO(&readfds);
+			FD_SET(udpSocket, &readfds);
+      int retval;
+      struct timeval tv;
+
 
       // used to compare the timestamp with the shortest time
       if (packetArray[0] != NULL) {
@@ -227,11 +235,29 @@ void handleTransmission(int udpSocket, struct sockaddr* serverStorage,socklen_t*
         time_t delay = smallest_timeout - current_timestamp;
         printf("current_timestamp is %ld\n", current_timestamp);
         printf("delay is %ld\n", delay);
-        if (current_timestamp > smallest_timeout) {
-          printf("smallest_timeout has expired\n");
-          printf("Sending packet %d %d\n", sequenceNumSent, windowsize);
-          sendPacket(udpSocket,serverStorage,addr_size,file,sequenceNum);
+
+        tv.tv_sec = delay;
+        tv.tv_usec = 0;
+
+        retval = select(udpSocket+1, &readfds, NULL, NULL, &tv);
+
+        if (retval == -1) {
+          perror("select()");
         }
+        else if (retval) {
+             printf("Data is available now.\n");
+            /* FD_ISSET(0, &rfds) will be true. */
+        } else {
+            sendPacket(udpSocket,serverStorage,addr_size,file,sequenceNum);
+		  		  printf("Sending packet %d %d\n", sequenceNum, windowsize-packetSize);
+			  		continue; // need to recalculate next timer
+        }
+
+        // if (current_timestamp > smallest_timeout) {
+        //   printf("smallest_timeout has expired\n");
+        //   printf("Sending packet %d %d\n", sequenceNumSent, windowsize);
+        //   sendPacket(udpSocket,serverStorage,addr_size,file,sequenceNum);
+        // }
       }
 
       // sending packets, while it is within our window size and not end of file
