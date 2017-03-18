@@ -120,32 +120,13 @@ int send_to(int fd, char *buffer, int len, int to, struct sockaddr* serverStorag
       // printf("Data is available now.\n");
       /* FD_ISSET(0, &rfds) will be true. */
       printf("Is this sending?\n");
+      return 0;
   }
   else {
       printf("Time out\n");
       return -2;
   }
-
-
     return 0;
-  //  // Check status
-  //  if (result < 0)
-  //     return -1;
-  //  else if (result > 0 && FD_ISSET(fd, &readset)) {
-  //     // Set non-blocking mode
-  //     if ((iof = fcntl(fd, F_GETFL, 0)) != -1)
-  //        fcntl(fd, F_SETFL, iof | O_NONBLOCK);
-  //     // receive
-  //     printf("Sending buffer\n");
-  //     int result = sendto(fd, buffer, len, 0, serverStorage, addr_size);
-  //     return result;
-
-  //     // set as before
-  //     if (iof != -1)
-  //        fcntl(fd, F_SETFL, iof);
-  //     return result;
-  //  }
-  //  return -2;
 }
 
 void error(char *msg)
@@ -205,7 +186,10 @@ int main(int argc, char *argv[]){
             strcpy(buffer, "FIN\nFile Not Found\n");
             printf("Sending Packet %s\n", buffer);
             nBytes = strlen(buffer);
-            sendto(udpSocket,buffer,nBytes,0,(struct sockaddr *)&serverStorage,addr_size);
+            int response = send_to(udpSocket,buffer,nBytes,0,(struct sockaddr *)&serverStorage,addr_size);
+            while (response == -2) {
+              response = send_to(udpSocket,buffer,nBytes,0,(struct sockaddr *)&serverStorage,addr_size);
+            }
             synReceived = 0; 
             break;
         }
@@ -219,7 +203,11 @@ int main(int argc, char *argv[]){
 
     //send message back, address is serverStorage
     printf("Sending Packet %s \n", buffer);
-    sendto(udpSocket,buffer,nBytes,0,(struct sockaddr *)&serverStorage,addr_size);
+
+    int response = send_to(udpSocket,buffer,nBytes,0,(struct sockaddr *)&serverStorage,addr_size);
+    while (response == -2) {
+      response = send_to(udpSocket,buffer,nBytes,0,(struct sockaddr *)&serverStorage,addr_size);
+    }
   }
 
   return 0;

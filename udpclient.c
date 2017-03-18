@@ -3,14 +3,54 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #define fileBufferLength 10000  //Increment by this amount everytime it overflows
+
+int send_to(int fd, char *buffer, int len, int to, struct sockaddr* serverStorage, socklen_t addr_size) {
+
+  fd_set rfds;
+  struct timeval tv;
+  int retval;
+
+  /* Watch stdin (fd 0) to see when it has input. */
+
+  FD_ZERO(&rfds);
+  FD_SET(fd, &rfds);
+
+  /* Wait up to five seconds. */
+  sendto(fd, buffer, len, 0, serverStorage, addr_size);
+  // printf("Buffer is %s", buffer);
+
+  tv.tv_sec = 0;
+  tv.tv_usec = 500;
+
+  retval = select(fd+1, &rfds, NULL, NULL, &tv);
+  /* Don't rely on the value of tv now! */
+
+  if (retval == -1)
+      perror("select()");
+  else if (retval) {
+      // printf("Data is available now.\n");
+      /* FD_ISSET(0, &rfds) will be true. */
+      printf("Is this sending?\n");
+      return 0;
+  }
+  else {
+      printf("Time out\n");
+      return -2;
+  }
+    return 0;
+}
 
 int sendSYN(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_size) {
   char buffer[5];
   strncpy(buffer, "SYN\n", 5);
   printf("Sending packet %s",buffer);
-  sendto(udpSocket,buffer,5,0,serverStorage,*addr_size);
+  int response = send_to(udpSocket,buffer,5,0,serverStorage,*addr_size);
+  while (response == -2) {
+    response = send_to(udpSocket,buffer,5,1000,serverStorage,*addr_size);
+  }
   return 0;
 }
 
@@ -64,7 +104,10 @@ int main(int argc, char *argv[]){
         strcat(buffer,"\n");
         printf("Sending packet request %s\n",fileName);
         nBytes = strlen(buffer);
-        sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
+        int response = send_to(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
+        while (response == -2) {
+          response = send_to(clientSocket,buffer,nBytes,1000,(struct sockaddr *)&serverAddr,addr_size);
+        }
         handShook=1;
       }
     }
@@ -141,7 +184,10 @@ int main(int argc, char *argv[]){
         strcat(buffer,sequenceNumString);  //ack packet that was received and stored
         strcat(buffer,"\n");
         nBytes = strlen(buffer);
-        sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
+        int response = send_to(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
+        while (response == -2) {
+          response = send_to(clientSocket,buffer,nBytes,1000,(struct sockaddr *)&serverAddr,addr_size);
+        }
         printf("Sending Packet %s \n",sequenceNumString);
       }
 
