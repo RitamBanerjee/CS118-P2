@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 
 #define STATUS_OK "200 OK"
 #define STATUS_NOT_FOUND "404 Not Found"
@@ -22,21 +23,20 @@ int sendPacket(int,struct sockaddr*, socklen_t*,char*,int);
 int receiveACK(int,struct sockaddr*, socklen_t*,char*,int);
 int createPacket(char **,char*,int);
 
-typedef struct Frame Frame;
-
 typedef struct Packet Packet; 
-struct Packet{
+
+struct Packet {
   char* buffer;
   int sequenceNum;
   int received; 
-  //int bufferSize; 
+  time_t timeout;
 };
 
 //typedef struct Packet* Packet; 
 struct Packet* packetArray[1000]; //array of pointers to packet structs
 int numPackets = 0;
 
-struct Packet* newPacket(char* data, int sequenceNum, int dataSize){
+struct Packet* newPacket(char* data, int sequenceNum, int dataSize, time_t timeout) {
   struct Packet* packet = malloc(sizeof (Packet));
 
   // setting buffer to be data
@@ -44,7 +44,7 @@ struct Packet* newPacket(char* data, int sequenceNum, int dataSize){
   memcpy(bufferCopy, data, dataSize);
   packet->buffer = bufferCopy;
   packet->sequenceNum = sequenceNum;
-  packet->received = 0;
+  packet->timeout = timeout;
   //packet->bufferSize = dataSize;
 
   return packet;
@@ -72,7 +72,7 @@ int deleteACKedPacket(int ACKno){
       if(packetArray[i]->sequenceNum==ACKno){
         //printf("packet seq == ackno");
         Packet* oldPacket = packetArray[i];
-        memmove(&packetArray, &packetArray[1], sizeof(packetArray) - sizeof(oldPacket));
+        memmove(&packetArray[i], &packetArray[i+1], sizeof(packetArray) - sizeof(oldPacket));
         deletePacket(oldPacket);
         numPackets--;
         
@@ -88,6 +88,16 @@ int deleteACKedPacket(int ACKno){
   }
   return -1; 
 }
+
+
+/*****************************
+  Time value used for select
+******************************/
+
+// struct timeval {
+//     long    tv_sec;         /* seconds */
+//     long    tv_usec;        /* microseconds */
+// };
 
 void error(char *msg)
 {
@@ -128,7 +138,6 @@ int main(int argc, char *argv[]){
 
   while(1){
     //receive incoming data
-
     nBytes = recvfrom(udpSocket,buffer,1024,0,(struct sockaddr *)&serverStorage, &addr_size);
     //printf("Received %d bytes\n", nBytes);
     char* line = strtok(buffer, "\n");
@@ -201,12 +210,30 @@ Format of Packet:
 void handleTransmission(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_size,char* file){
     char* buffer = malloc(1024);
     int nBytes,transmitting = 1;
-    int windowStart = 0, windowEnd = 0;
+    int windowStart = 0, windowEnd = 0, windowDeleted = 0;
     //sequence num is num used in datagram, sequenceNumSent includes data in the latest package
    
     int sequenceNum = 0, sequenceNumSent = 0, sequenceSentSize = 0;
     int sendingPacket = 1; //set to 0 when waiting on ACKs from client, set to 1 when packets in window ready to be sent
+   
     while(transmitting){
+      // FD_ZERO(&readfds);
+			// FD_SET(fd, &readfds);
+
+      // used to compare the timestamp with the shortest time
+      if (packetArray[0] != NULL) {
+        time_t current_timestamp = time(NULL);
+        time_t smallest_timeout = packetArray[0]->timeout;
+        time_t delay = smallest_timeout - current_timestamp;
+        printf("current_timestamp is %ld\n", current_timestamp);
+        printf("delay is %ld\n", delay);
+        if (current_timestamp > smallest_timeout) {
+          printf("smallest_timeout has expired\n");
+          printf("Sending packet %d %d\n", sequenceNumSent, windowsize);
+          sendPacket(udpSocket,serverStorage,addr_size,file,sequenceNum);
+        }
+      }
+
       // sending packets, while it is within our window size and not end of file
       while(windowEnd < windowStart+windowsize && sequenceNumSent != -1) {
         printf("Sending packet %d %d\n", sequenceNumSent, windowsize);
@@ -236,7 +263,16 @@ void handleTransmission(int udpSocket, struct sockaddr* serverStorage,socklen_t*
         sequenceNum = newSequenceNum;
         printf("sequenceNum is now %d\n", sequenceNum);
         windowStart += packetSize;
+        if (windowDeleted > 0) {
+          windowStart += windowDeleted;
+          windowDeleted = 0;
+          printf("fixing window size because of retransmission\n");
+        }
         printf("increasing window start to %d\n", windowStart);
+      }
+      else if (newSequenceNum == sequenceNum) {
+        // this happens when we have a missing packet
+        windowDeleted += packetSize;
       }
     }
 }
@@ -254,25 +290,32 @@ int sendPacket(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_siz
 int receiveACK(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_size,char* file,int sequenceNum){
       char* buffer = malloc(1024);
       int nBytes = recvfrom(udpSocket,buffer,1024,0,serverStorage, &(*addr_size));
-      buffer[nBytes] = 0;
-      // printf("Buffer recieved: %i\n%s\n\n", nBytes, buffer);
-      char* line = strtok(buffer, "\n");
-      if(strcmp(line,"ACK")==0){
-        char* ackNumString = strtok(NULL,"\n");
-        int ackNum = atoi(ackNumString); 
+      if (nBytes != -1) {
+        buffer[nBytes] = 0;
+        // printf("Buffer recieved: %i\n%s\n\n", nBytes, buffer);
+        char* line = strtok(buffer, "\n");
+        if(strcmp(line,"ACK")==0){
+          char* ackNumString = strtok(NULL,"\n");
+          int ackNum = atoi(ackNumString); 
 
-        printf("Receiving Packet %d\n",ackNum);
+          printf("Receiving Packet %d\n",ackNum);
 
-        // this is an ack we expect
-        if (ackNum == sequenceNum) {
-          return deleteACKedPacket(ackNum);
-        }  
-        // we got an ack we didnt expect (meaning a packet dropped) 
-        else {
-          // need to handle retransmission
+          // this is an ack we expect
+          if (ackNum == sequenceNum) {
+            // return next expected ack num
+            return deleteACKedPacket(ackNum);
+          }  
+          // we got an ack we didnt expect (meaning a packet dropped) 
+          else {
+            // need to handle retransmission
+            printf("Uh oh, packet %d was lost...\n", sequenceNum);
+            // still needs to delete this packet, but it doesn't return the next one
+            deleteACKedPacket(ackNum);
+            return sequenceNum;
+          }
         }
       }
-
+      printf("Have not receieved any packets");
       return sequenceNum; 
 }
 int createPacket(char** buffer,char* file,int sequenceNum){
@@ -306,7 +349,9 @@ int createPacket(char** buffer,char* file,int sequenceNum){
       currentData-= nBytes;
       memcpy(*buffer,currentData,freespace+nBytes);
       //freespace is always 1004. IDK if we should hardcode it thoo
-      packetArray[numPackets] = newPacket(*buffer,sequenceNum,freespace+nBytes);
+      time_t timestamp = time(NULL);
+      // printf("Timestamp: %ld\n",timestamp);
+      packetArray[numPackets] = newPacket(*buffer,sequenceNum,freespace+nBytes, timestamp+3);
       printPacket(packetArray[numPackets]);
       sequenceNum+=freespace;     //increment sequence number by amount of new data sent
       numPackets++;
