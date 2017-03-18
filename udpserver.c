@@ -122,6 +122,7 @@ int send_to(int fd, char *buffer, int len, int to, struct sockaddr* serverStorag
       printf("Is this sending?\n");
   }
   else {
+      printf("Time out\n");
       return -2;
   }
 
@@ -274,38 +275,38 @@ void handleTransmission(int udpSocket, struct sockaddr* serverStorage,socklen_t*
       struct timeval tv;
 
 
-      // used to compare the timestamp with the shortest time
-      if (packetArray[0] != NULL) {
-        time_t current_timestamp = time(NULL);
-        time_t smallest_timeout = packetArray[0]->timeout;
-        time_t delay = smallest_timeout - current_timestamp;
-        printf("current_timestamp is %ld\n", current_timestamp);
-        printf("delay is %ld\n", delay);
+      // // used to compare the timestamp with the shortest time
+      // if (packetArray[0] != NULL) {
+      //   time_t current_timestamp = time(NULL);
+      //   time_t smallest_timeout = packetArray[0]->timeout;
+      //   time_t delay = smallest_timeout - current_timestamp;
+      //   printf("current_timestamp is %ld\n", current_timestamp);
+      //   printf("delay is %ld\n", delay);
         
 
-        // tv.tv_sec = delay;
-        // tv.tv_usec = 0;
+      //   // tv.tv_sec = delay;
+      //   // tv.tv_usec = 0;
 
-        // retval = select(udpSocket+1, &readfds, NULL, NULL, &tv);
+      //   // retval = select(udpSocket+1, &readfds, NULL, NULL, &tv);
 
-        // if (retval == -1) {
-        //   perror("select()");
-        // }
-        // else if (retval) {
-        //      printf("Data is available now.\n");
-        //     /* FD_ISSET(0, &rfds) will be true. */
-        // } else {
-        //     sendPacket(udpSocket,serverStorage,addr_size,file,sequenceNum);
-		  	// 	  printf("Sending packet %d %d\n", sequenceNum, windowsize-packetSize);
-			  // 		// continue; // need to recalculate next timer
-        // }
+      //   // if (retval == -1) {
+      //   //   perror("select()");
+      //   // }
+      //   // else if (retval) {
+      //   //      printf("Data is available now.\n");
+      //   //     /* FD_ISSET(0, &rfds) will be true. */
+      //   // } else {
+      //   //     sendPacket(udpSocket,serverStorage,addr_size,file,sequenceNum);
+		  // 	// 	  printf("Sending packet %d %d\n", sequenceNum, windowsize-packetSize);
+			//   // 		// continue; // need to recalculate next timer
+      //   // }
 
-        if (current_timestamp > smallest_timeout && sequenceNum==packetArray[0]->sequenceNum) {
-          printf("smallest_timeout has expired\n");
-          printf("Sending packet %d %d\n", sequenceNum, windowsize-packetSize);
-          sendPacket(udpSocket,serverStorage,addr_size,file,sequenceNum);
-        }
-      }
+      //   if (current_timestamp > smallest_timeout && sequenceNum==packetArray[0]->sequenceNum) {
+      //     printf("smallest_timeout has expired\n");
+      //     printf("Sending packet %d %d\n", sequenceNum, windowsize-packetSize);
+      //     sendPacket(udpSocket,serverStorage,addr_size,file,sequenceNum);
+      //   }
+      // }
 
       // sending packets, while it is within our window size and not end of file
       while(windowEnd < windowStart+windowsize && sequenceNumSent != -1) {
@@ -329,7 +330,7 @@ void handleTransmission(int udpSocket, struct sockaddr* serverStorage,socklen_t*
           printf("Sending FIN\n");
           strcpy(buffer,"FIN\n");
           nBytes = strlen(buffer);
-          sendto(udpSocket,buffer,nBytes,0,serverStorage,*addr_size);
+          send_to(udpSocket,buffer,nBytes,0,serverStorage,*addr_size);
           transmitting = 0;
       }
       else if (newSequenceNum >= sequenceNum) {
