@@ -70,6 +70,7 @@ int main(int argc, char *argv[]){
     }
     if(handShook){  //handles receiving packets, sending acks, and terminating on FIN
       int recievedPacketSize = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
+      printf("recievepacket");
       nBytes = 1024;
       printf("buffer is \n%s\n", buffer);
       printf("nBytes is %i\n", nBytes);

@@ -7,6 +7,7 @@
 #include <math.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #define STATUS_OK "200 OK"
 #define STATUS_NOT_FOUND "404 Not Found"
@@ -92,14 +93,59 @@ int deleteACKedPacket(int ACKno){
 }
 
 
-/*****************************
-  Time value used for select
-******************************/
+int send_to(int fd, char *buffer, int len, int to, struct sockaddr* serverStorage, socklen_t addr_size) {
 
-// struct timeval {
-//     long    tv_sec;         /* seconds */
-//     long    tv_usec;        /* microseconds */
-// };
+  fd_set rfds;
+  struct timeval tv;
+  int retval;
+
+  /* Watch stdin (fd 0) to see when it has input. */
+
+  FD_ZERO(&rfds);
+  FD_SET(fd, &rfds);
+
+  /* Wait up to five seconds. */
+  sendto(fd, buffer, len, 0, serverStorage, addr_size);
+  // printf("Buffer is %s", buffer);
+
+  tv.tv_sec = 0;
+  tv.tv_usec = 500;
+
+  retval = select(fd+1, &rfds, NULL, NULL, &tv);
+  /* Don't rely on the value of tv now! */
+
+  if (retval == -1)
+      perror("select()");
+  else if (retval) {
+      // printf("Data is available now.\n");
+      /* FD_ISSET(0, &rfds) will be true. */
+      printf("Is this sending?\n");
+  }
+  else {
+      return -2;
+  }
+
+
+    return 0;
+  //  // Check status
+  //  if (result < 0)
+  //     return -1;
+  //  else if (result > 0 && FD_ISSET(fd, &readset)) {
+  //     // Set non-blocking mode
+  //     if ((iof = fcntl(fd, F_GETFL, 0)) != -1)
+  //        fcntl(fd, F_SETFL, iof | O_NONBLOCK);
+  //     // receive
+  //     printf("Sending buffer\n");
+  //     int result = sendto(fd, buffer, len, 0, serverStorage, addr_size);
+  //     return result;
+
+  //     // set as before
+  //     if (iof != -1)
+  //        fcntl(fd, F_SETFL, iof);
+  //     return result;
+  //  }
+  //  return -2;
+}
 
 void error(char *msg)
 {
@@ -235,29 +281,30 @@ void handleTransmission(int udpSocket, struct sockaddr* serverStorage,socklen_t*
         time_t delay = smallest_timeout - current_timestamp;
         printf("current_timestamp is %ld\n", current_timestamp);
         printf("delay is %ld\n", delay);
+        
 
-        tv.tv_sec = delay;
-        tv.tv_usec = 0;
+        // tv.tv_sec = delay;
+        // tv.tv_usec = 0;
 
-        retval = select(udpSocket+1, &readfds, NULL, NULL, &tv);
+        // retval = select(udpSocket+1, &readfds, NULL, NULL, &tv);
 
-        if (retval == -1) {
-          perror("select()");
-        }
-        else if (retval) {
-             printf("Data is available now.\n");
-            /* FD_ISSET(0, &rfds) will be true. */
-        } else {
-            sendPacket(udpSocket,serverStorage,addr_size,file,sequenceNum);
-		  		  printf("Sending packet %d %d\n", sequenceNum, windowsize-packetSize);
-			  		continue; // need to recalculate next timer
-        }
-
-        // if (current_timestamp > smallest_timeout) {
-        //   printf("smallest_timeout has expired\n");
-        //   printf("Sending packet %d %d\n", sequenceNumSent, windowsize);
-        //   sendPacket(udpSocket,serverStorage,addr_size,file,sequenceNum);
+        // if (retval == -1) {
+        //   perror("select()");
         // }
+        // else if (retval) {
+        //      printf("Data is available now.\n");
+        //     /* FD_ISSET(0, &rfds) will be true. */
+        // } else {
+        //     sendPacket(udpSocket,serverStorage,addr_size,file,sequenceNum);
+		  	// 	  printf("Sending packet %d %d\n", sequenceNum, windowsize-packetSize);
+			  // 		// continue; // need to recalculate next timer
+        // }
+
+        if (current_timestamp > smallest_timeout && sequenceNum==packetArray[0]->sequenceNum) {
+          printf("smallest_timeout has expired\n");
+          printf("Sending packet %d %d\n", sequenceNum, windowsize-packetSize);
+          sendPacket(udpSocket,serverStorage,addr_size,file,sequenceNum);
+        }
       }
 
       // sending packets, while it is within our window size and not end of file
@@ -285,7 +332,7 @@ void handleTransmission(int udpSocket, struct sockaddr* serverStorage,socklen_t*
           sendto(udpSocket,buffer,nBytes,0,serverStorage,*addr_size);
           transmitting = 0;
       }
-      else if (newSequenceNum != sequenceNum) {
+      else if (newSequenceNum >= sequenceNum) {
         sequenceNum = newSequenceNum;
         printf("sequenceNum is now %d\n", sequenceNum);
         windowStart += packetSize;
@@ -296,8 +343,13 @@ void handleTransmission(int udpSocket, struct sockaddr* serverStorage,socklen_t*
         }
         printf("increasing window start to %d\n", windowStart);
       }
+      else if (newSequenceNum < sequenceNum ) {
+        // this could happen if something is transmitted twice?
+        // in this case we can ignore
+      }
       else if (newSequenceNum == sequenceNum) {
         // this happens when we have a missing packet
+        printf("Missing packet\n");
         windowDeleted += packetSize;
       }
     }
@@ -308,7 +360,13 @@ int sendPacket(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_siz
       int sequenceNumSent = createPacket(&buffer,file,sequenceNum); //returns seq no. that has been sent, will be next seq. no. Set to -1 when entire file has been sent
       int nBytes = strlen(buffer);
       // printf("buffer\n%s\n", buffer);
-      sendto(udpSocket,buffer,1024,0,serverStorage,*addr_size);
+      // sendto(udpSocket,buffer,1024,0,serverStorage,*addr_size);
+      int response = send_to(udpSocket,buffer,1024,1000,serverStorage,*addr_size);
+      while (response == -2) {
+        printf("Sending packet %d Retransmission\n", sequenceNum);
+        response = send_to(udpSocket,buffer,1024,1000,serverStorage,*addr_size);
+      }
+      printf("response is %d\n", response);
       return sequenceNumSent;
 
 }
@@ -332,12 +390,18 @@ int receiveACK(int udpSocket, struct sockaddr* serverStorage,socklen_t* addr_siz
             return deleteACKedPacket(ackNum);
           }  
           // we got an ack we didnt expect (meaning a packet dropped) 
-          else {
+          else if (ackNum > sequenceNum) {
             // need to handle retransmission
             printf("Uh oh, packet %d was lost...\n", sequenceNum);
             // still needs to delete this packet, but it doesn't return the next one
             deleteACKedPacket(ackNum);
             return sequenceNum;
+          }
+          // this means the ack we got was less, so we can just ignore it
+          else {
+            // need to handle retransmission
+            printf("Sequencenum %d is less than ackNum", sequenceNum);
+            return ackNum;
           }
         }
       }
